@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        #map {
+            height: 1000px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // 初始化地图
+        var mapCenter = [32.1 ,118.5];
+        var map = L.map('map').setView(mapCenter, 2);
+
+        // 添加瓦片层
+        L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+            subdomains: ['1', '2', '3', '4'],
+            attribution: '© 高德地图 contributors'
+        }).addTo(map);
+
+        // 设置地图边界
+        var southWest = L.latLng(30.34, 117.50);  // 替换为你想要的最小经纬度
+        var northEast = L.latLng(32.17, 119);    // 替换为你想要的最大经纬度
+        var bounds = L.latLngBounds(southWest, northEast);
+        map.setMaxBounds(bounds);
+        map.fitBounds(bounds);
+
+        // 存储标记
+        var markers = {};
+
+        // 更新地图上的标记
+        function updateMarkers(data) {
+            // 清除现有标记
+            for (var markerId in markers) {
+                if (markers.hasOwnProperty(markerId)) {
+                    map.removeLayer(markers[markerId]);
+                }
+            }
+
+            // 添加新标记
+            data.forEach(function(data) {
+                var lat = data.latitude / 100;
+                var lon = data.longitude / 100;
+                var imagePath = data.timestamp_column;  // 替换为你的图片路径
+                var popupContent = `
+                    <div class="popup-content">
+                        <strong>ID:</strong> ${data.id}<br>
+                        <strong>Width:</strong> ${data.width}<br>
+                        <strong>Avg Gray:</strong> ${data.avg_gray}<br>
+                        <strong>Timestamp:</strong> ${data.timestamp_column}<br>
+                        <img class="popup-image" src="${imagePath}" onerror="this.onerror=null; this.src='/static/images/default.jpg'; console.log('Image not found:', '${imagePath}');" alt="Marker Image">
+                    </div>
+                `;
+                var marker = L.marker([lat, lon]).bindPopup(popupContent).addTo(map);
+                markers[data.id] = marker;
+
+            });
+        }
+
+        // 从API获取数据并更新地图
+        function fetchDataAndUpdateMap() {
+            fetch('/api/data')
+                .then(response => response.json())
+                .then(data => updateMarkers(data))
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // 初始加载数据
+        fetchDataAndUpdateMap();
+
+        // 每5秒刷新一次数据
+        setInterval(fetchDataAndUpdateMap, 5000);
+                // 存储鼠标按下位置
+        var dragStartLatLng = null;
+
+        // 监听 mousedown 事件以获取鼠标按下位置
+        map.on('mousedown', function(e) {
+            dragStartLatLng = e.latlng;
+        });
+
+        // 处理地图拖动结束事件
+        map.on('dragend', function(e) {
+            if (dragStartLatLng) {
+                var currentLatLng = map.getCenter();
+                var offsetLat = currentLatLng.lat - dragStartLatLng.lat;
+                var offsetLng = currentLatLng.lng - dragStartLatLng.lng;
+                var newCenterLat = currentLatLng.lat + offsetLat;
+                var newCenterLng = currentLatLng.lng + offsetLng;
+                var newCenter = L.latLng(newCenterLat, newCenterLng);
+                map.setView(newCenter, map.getZoom());
+                console.log("Map drag ended. New center set to mouse position:", newCenter);
+                dragStartLatLng = null; // 重置鼠标按下位置
+            } else {
+                console.log("Drag start position not available.");
+            }
+        });
+
+        // 处理地图移动事件（可选）
+        map.on('moveend', function(e) {
+            var center = map.getCenter();
+            console.log("Map move ended. New center:", center);
+            // 可以在这里执行其他操作，例如更新地图中心点
+        });
+
+    </script>
+</body>
+</html>
